@@ -1,11 +1,10 @@
 
-name: Build TBO Client JAR
+name: Build TBO
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
@@ -18,29 +17,44 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 21
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
 
-      - name: Extract project
+      - name: Find and extract ZIP
         run: |
-          unzip -q TBO-Forge-1.21.11-61.2.5-packformat15.zip
+          ZIP=$(find . -maxdepth 2 -name '*.zip' -print -quit)
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: No project ZIP found!"
+            exit 1
+          fi
+          mkdir extracted
+          unzip -q "$ZIP" -d extracted
 
-      - name: Build TBO
-        working-directory: TBO-Forge-1.21.11-61.2.5
+      - name: Find Gradle project
+        run: |
+          FILE=$(find extracted -name build.gradle -o -name build.gradle.kts | head -n 1)
+          if [ -z "$FILE" ]; then
+            echo "ERROR: No Gradle build file found!"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$(dirname "$FILE")" >> "$GITHUB_ENV"
+
+      - name: Build
         run: gradle --no-daemon clean build
+        working-directory: extracted
 
-      - name: Upload TBO JAR
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
-          name: TBO-Client-Forge-1.21.11
-          path: TBO-Forge-1.21.11-61.2.5/build/libs/*.jar
+          name: TBO-Forge-JAR
+          path: extracted/**/build/libs/*.jar
           if-no-files-found: error
           
